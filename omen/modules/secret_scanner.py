@@ -1,5 +1,7 @@
 """Basic secret-scanning module for OMEN — regex-based credential detection."""
 
+from __future__ import annotations
+
 import re
 from pathlib import Path
 
