@@ -5,9 +5,9 @@ A terminal-native security & developer toolkit. No GUI, no web server — just f
 ## Features
 
 - **`omen encode`** — Base64, Hex, URL, ROT13 encode/decode
-- **`omen secret scan`** — scan files/directories for leaked secrets (AWS/GitHub/Slack tokens, private keys)
+- **`omen secret scan`** — scan files/directories for leaked secrets (AWS/GitHub/Slack tokens, private keys), with a live indexing spinner and scan progress bar
 - **`omen jwt decode`** — JWT header/payload inspection, flags `alg=none` misconfigurations
-- **`omen log tail` / `omen log filter`** — colorized real-time log tailing and level filtering
+- **`omen log tail` / `omen log filter`** — colorized real-time log tailing (with an idle spinner while waiting for new lines) and level filtering
 - **`omen req get/post`** — quick HTTP requests from the terminal, with local SQLite history (`omen req history`)
 - **`omen banner`** — full animated OMEN logo dashboard with a live glitch effect (press Ctrl+C to exit); a short version of this also plays automatically at startup
 - **`--output json`** — machine-readable output on supported commands, for piping into other tools
@@ -63,8 +63,11 @@ Create `~/.omen/config.yaml` to set persistent defaults:
 ```yaml
 banner_speed: 1.0
 show_banner: true
-output_format: text   # or "json"
+output_format: text          # or "json"
 history_max_rows: 50
+request_timeout: 10          # seconds, for `omen req get/post`
+log_poll_interval: 0.5       # seconds, for `omen log tail`
+secret_scan_skip_dirs: []    # extra directory names to skip, e.g. [dist, build]
 ```
 
 (Requires `pip install omen-cli[config]` for YAML support — otherwise OMEN falls back to defaults.)
@@ -83,6 +86,7 @@ omen/
 │   │   └── log_tail.py         # log tailing + level filtering
 │   └── utils/
 │       ├── banner.py           # boot spinner + live logo dashboard (ANSI, no deps)
+│       ├── spinners.py         # reusable spinners + progress bar (secret scan, log tail)
 │       ├── config.py           # ~/.omen/config.yaml loader
 │       └── db.py               # local SQLite request history
 └── tests/
