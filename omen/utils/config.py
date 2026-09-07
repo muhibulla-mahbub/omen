@@ -12,6 +12,9 @@ DEFAULTS: dict[str, Any] = {
     "show_banner": True,
     "output_format": "text",  # "text" or "json"
     "history_max_rows": 50,
+    "request_timeout": 10,       # seconds, for `omen req get/post`
+    "log_poll_interval": 0.5,    # seconds, for `omen log tail`
+    "secret_scan_skip_dirs": [], # extra directory names to skip, in addition to the built-in list
 }
 
 
@@ -53,5 +56,8 @@ banner_speed: 1.0        # animation speed multiplier
 show_banner: true        # set to false to always skip the startup banner
 output_format: text      # "text" or "json"
 history_max_rows: 50     # how many requests to keep in local history
+request_timeout: 10      # seconds, for `omen req get/post`
+log_poll_interval: 0.5   # seconds, for `omen log tail`
+secret_scan_skip_dirs: []  # extra directory names to skip when scanning, e.g. [dist, build]
 """
     path.write_text(content, encoding="utf-8")
