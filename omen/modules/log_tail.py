@@ -27,10 +27,14 @@ def detect_level(line: str) -> Optional[str]:
     return match.group(1).upper()
 
 
-def tail_file(path: str, poll_interval: float = 0.5) -> Iterator[str]:
+def tail_file(path: str, poll_interval: float = 0.5, on_idle=None) -> Iterator[str]:
     """
     Yield new lines appended to `path`, similar to `tail -f`.
     Starts at the end of the file, does not replay existing content.
+
+    If `on_idle` is given, it's called once per poll while waiting for new
+    content (no new line available yet) — used by the CLI to drive a
+    waiting-state spinner without interleaving it with printed lines.
     """
     file_path = Path(path)
     with open(file_path, "r", errors="ignore") as fh:
@@ -40,6 +44,8 @@ def tail_file(path: str, poll_interval: float = 0.5) -> Iterator[str]:
             if line:
                 yield line.rstrip("\n")
             else:
+                if on_idle is not None:
+                    on_idle()
                 time.sleep(poll_interval)
 
 
