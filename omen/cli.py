@@ -119,10 +119,27 @@ def secret() -> None:
 @click.pass_context
 def secret_scan(ctx: click.Context, path: str) -> None:
     """Scan PATH for potential leaked secrets (AWS keys, tokens, private keys, etc)."""
-    from omen.modules.secret_scanner import scan_path
+    from omen.modules.secret_scanner import list_files, scan_file
+    from omen.utils.spinners import BRAILLE_BLOCKS_FRAMES, ProgressBar, Spinner
 
-    findings = scan_path(path)
     output_format = ctx.obj.get("output", "text")
+    config = ctx.obj.get("config", {})
+    extra_skip_dirs = config.get("secret_scan_skip_dirs", [])
+
+    with Spinner(BRAILLE_BLOCKS_FRAMES, "Indexing files..."):
+        files = list_files(path, extra_skip_dirs=extra_skip_dirs)
+
+    findings: list = []
+    show_progress = output_format != "json" and len(files) > 1
+    bar = ProgressBar(total=len(files), label="Scanning") if show_progress else None
+
+    for i, file_path in enumerate(files):
+        findings.extend(scan_file(file_path))
+        if bar:
+            bar.update(i + 1)
+
+    if bar:
+        bar.finish(f"Scanned {len(files)} file(s).")
 
     if output_format == "json":
         click.echo(json_lib.dumps(findings, indent=2))
@@ -186,21 +203,30 @@ def log() -> None:
 @log.command("tail")
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--level", type=str, default=None, help="Only show lines matching this log level (e.g. ERROR).")
-def log_tail_cmd(path: str, level: str | None) -> None:
+@click.pass_context
+def log_tail_cmd(ctx: click.Context, path: str, level: str | None) -> None:
     """Tail PATH in real time, colorized by detected log level."""
     from omen.modules.log_tail import LEVEL_COLORS, detect_level, filter_lines, tail_file
+    from omen.utils.spinners import FLORAL_FRAMES, TickSpinner
 
     click.secho(f"Tailing {path}... (Ctrl+C to stop)", fg="cyan")
-    lines = tail_file(path)
+
+    config = ctx.obj.get("config", {})
+    poll_interval = config.get("log_poll_interval", 0.5)
+
+    idle_spinner = TickSpinner(FLORAL_FRAMES, "Waiting for new lines...")
+    lines = tail_file(path, poll_interval=poll_interval, on_idle=idle_spinner.tick)
     if level:
         lines = filter_lines(lines, level=level)
 
     try:
         for line in lines:
+            idle_spinner.clear()
             detected = detect_level(line)
             color = LEVEL_COLORS.get(detected, None) if detected else None
             click.secho(line, fg=color)
     except KeyboardInterrupt:
+        idle_spinner.clear()
         click.echo("\nStopped.")
 
 
@@ -285,12 +311,14 @@ def _do_request(
             key, _, value = h.partition(":")
             header_dict[key.strip()] = value.strip()
 
+    config = ctx.obj.get("config", {})
+    timeout = config.get("request_timeout", 10)
+
     try:
-        resp = requests.request(method, url, headers=header_dict, data=data, timeout=10)
+        resp = requests.request(method, url, headers=header_dict, data=data, timeout=timeout)
     except requests.RequestException as exc:
         raise click.ClickException(f"Request failed: {exc}")
 
-    config = ctx.obj.get("config", {})
     save_request(
         method=method,
         url=url,
