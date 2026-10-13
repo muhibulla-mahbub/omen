@@ -4,41 +4,45 @@ OMEN startup banner animation.
 Two pieces:
 1. `play_boot_loader()` — a short Braille-spinner boot sequence, meant to run
    once at CLI startup (bounded duration, never blocks forever).
-2. `render_live_dashboard()` — the full animated OMEN logo with a shuffling
-   glitch effect, meant for `omen banner` (a standalone preview/demo command)
-   since it runs until the user presses Ctrl+C.
+2. `render_live_dashboard()` — the boxed OMEN logo with a column-by-column
+   reveal and typewriter welcome/version lines, meant for `omen banner` (a
+   standalone preview/demo command).
 """
 
 from __future__ import annotations
 
-import random
 import sys
 import time
 
 _CLEAR = "\x1b[H\x1b[J"
 _HIDE_CURSOR = "\x1b[?25l"
 _SHOW_CURSOR = "\x1b[?25h"
-_RESET = "\x1b[0m"
-
-_PURPLE = "\x1b[38;2;160;60;240m"
-_CYAN = "\x1b[38;2;0;255;190m"
-
-_OMEN_BASE = [
-    r"   ____  __  __ _____ _   _ ",
-    r"  / __ \|  \/  |  ___| \ | |",
-    r" | |  | | |\/| | |__ |  \| |",
-    r" | |__| | |  | | |___| |\  |",
-    r"  \____/|_|  |_|_____|_| \_|",
-]
-
-_SHUFFLE_CHARS = ["/", "\\", "_", "|", "-", "[", "]", "▄", "▀", "█"]
 
 _BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+# Boxed logo used by `omen banner` (render_live_dashboard)
+_BOX_BANNER = """  ██████╗ ███╗   ███╗███████╗███╗   ██╗
+ ██╔═══██╗████╗ ████║██╔════╝████╗  ██║
+ ██║   ██║██╔████╔██║█████╗  ██╔██╗ ██║
+ ██║   ██║██║╚██╔╝██║██╔══╝  ██║╚██╗██║
+ ╚██████╔╝██║ ╚═╝ ██║███████╗██║ ╚████║
+  ╚═════╝ ╚═╝     ╚═╝╚══════╝╚═╝  ╚═══╝"""
+
+_WELCOME_TEXT = "Welcome to OMEN CLI"
+_VERSION_TEXT = "CLI Version 0.2.0"
 
 
 def _clear_screen() -> None:
     sys.stdout.write(_CLEAR)
     sys.stdout.flush()
+
+
+def _typewriter(text: str, delay: float = 0.03) -> None:
+    for char in text:
+        sys.stdout.write(char)
+        sys.stdout.flush()
+        time.sleep(delay)
+    sys.stdout.write("\n")
 
 
 def play_boot_loader(duration: float = 2.5, label: str = "Booting OMEN Core System...") -> None:
@@ -72,48 +76,49 @@ def play_boot_loader(duration: float = 2.5, label: str = "Booting OMEN Core Syst
 
 def render_live_dashboard() -> None:
     """
-    Render the animated OMEN logo with a glitch/shuffle effect, plus a fixed
-    status panel below it. Runs until interrupted with Ctrl+C — intended for
-    a standalone `omen banner` preview command, not for every CLI invocation.
+    Render the boxed OMEN logo: a bordered box with a typewriter "Welcome to
+    OMEN CLI" line, a column-by-column reveal of the logo, and a typewriter
+    version line. Intended for the standalone `omen banner` preview command.
+    No-ops to a plain printed banner when stdout isn't a real terminal.
     """
-    line_1 = " [!] OMEN SECURITY PROTOCOLS INITIATED..."
-    line_2 = " [!] ACCESS GRANTED. WELCOME TO OMEN TERMINAL."
-    border = " ------------------------------------------------"
+    if not sys.stdout.isatty():
+        print(_BOX_BANNER)
+        print(f"{_WELCOME_TEXT}\n{_VERSION_TEXT}")
+        return
 
-    sys.stdout.write(_HIDE_CURSOR)
-    sys.stdout.write("\n" * 10)
-    sys.stdout.flush()
+    lines = _BOX_BANNER.split("\n")
+    max_len = max(len(line) for line in lines)
+    padded_lines = [line.ljust(max_len) for line in lines]
+
+    box_width = max_len + 2
+    top_border = "┌" + "─" * box_width + "┐"
+    bottom_border = "└" + "─" * box_width + "┘"
 
     try:
-        while True:
-            sys.stdout.write("\x1b[10A")
+        sys.stdout.write(_HIDE_CURSOR)
+        _clear_screen()
 
-            for line in _OMEN_BASE:
-                styled_line = ""
-                for char in line:
-                    if char in ["_", "/", "\\", "|"]:
-                        if random.random() < 0.15:
-                            styled_line += f"{_CYAN}{random.choice(_SHUFFLE_CHARS)}"
-                        else:
-                            styled_line += f"{_PURPLE}{char}"
-                    elif char != " ":
-                        styled_line += f"{_CYAN}{char}"
-                    else:
-                        styled_line += " "
-                sys.stdout.write(f"\r{styled_line}{_RESET}       \n")
+        print(top_border)
 
-            sys.stdout.write(f"\r\n{border}\n")
-            sys.stdout.write(f"\r\x1b[1;37m{line_1}{_RESET}\n")
-            sys.stdout.write(f"\r\x1b[1;32m{line_2}{_RESET}\n")
-            sys.stdout.write(f"\r{border}\n")
+        sys.stdout.write("│ ")
+        _typewriter(_WELCOME_TEXT.ljust(box_width - 1) + "│", delay=0.04)
 
+        for i in range(max_len + 1):
+            current_frame = "\n".join(
+                "│ " + line[:i].ljust(max_len) + " │" for line in padded_lines
+            )
+            sys.stdout.write("\x1b[H\x1b[2B" + current_frame)
             sys.stdout.flush()
-            time.sleep(0.08)
+            time.sleep(0.02)
+
+        sys.stdout.write(f"\x1b[H\x1b[{2 + len(lines)}B\n")
+
+        sys.stdout.write("│ ")
+        _typewriter(_VERSION_TEXT.ljust(box_width - 1) + "│", delay=0.03)
+
+        print(bottom_border)
     except KeyboardInterrupt:
-        sys.stdout.write("\x1b[10A\x1b[J")
-        sys.stdout.flush()
-        print(f" {_CYAN}[+]{_RESET} OMEN PIPELINE DISCONNECTED. TERMINAL CLEANUP COMPLETE.")
-        print(f" \x1b[1;37mOMEN_USER@OS:~# {_RESET}")
+        sys.stdout.write("\n")
     finally:
         sys.stdout.write(_SHOW_CURSOR)
         sys.stdout.flush()
@@ -122,8 +127,8 @@ def render_live_dashboard() -> None:
 def play_banner(speed: float = 1.0, skip_if_not_tty: bool = True, loop: bool = False) -> None:
     """
     Backwards-compatible entry point used by `cli.py` at startup.
-    Plays the bounded boot-loader spinner (never the infinite live dashboard,
-    which would hang every command until Ctrl+C).
+    Plays the bounded Braille-spinner boot loader (never the boxed banner,
+    which is for the standalone `omen banner` command).
     """
     duration = 2.5 / max(speed, 0.1)
     if skip_if_not_tty and not sys.stdout.isatty():
