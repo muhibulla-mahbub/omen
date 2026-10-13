@@ -46,7 +46,7 @@ def cli(ctx: click.Context, no_banner: bool, banner_speed: float | None, output:
 
 @cli.command("banner")
 def banner_command() -> None:
-    """Play the full animated OMEN logo dashboard (press Ctrl+C to exit)."""
+    """Play the full boxed OMEN logo animation (a standalone preview)."""
     render_live_dashboard()
 
 
